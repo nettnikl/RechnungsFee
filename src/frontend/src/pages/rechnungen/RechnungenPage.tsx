@@ -4246,53 +4246,47 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
         </div>
       )}
 
-      {!formModus && (
+      {!formModus && selectedRechnung && (
         <div className="w-[28rem] shrink-0 h-full overflow-hidden">
-          {selectedRechnung ? (
-            <RechnungDetail
-              key={`${selectedId ?? 0}-${detailVersion}`}
-              rechnung={selectedRechnung}
-              onClose={() => setSelectedId(null)}
-              onEdit={() => setFormModus('bearbeiten')}
-              onDelete={() => {
-                if (confirm('Rechnung wirklich löschen?')) {
-                  deleteMutation.mutate(selectedRechnung.id)
-                }
-              }}
-              onFinalisiert={(r) => setPendingEditRechnung(r)}
-              onZahlungErfasst={(r) => { setPendingEditRechnung(r); setDetailVersion(v => v + 1) }}
-              onGutschriftCreated={(gs) => { setPendingEditRechnung(gs); setSelectedId(gs.id); setFormModus('bearbeiten') }}
-              onRechnungAusLs={(id) => rechnungAusLsMutation.mutate(id)}
-              onSelectId={(id, isLieferschein, filterRechnungId) => {
-                // Seitenwechsel wenn Ziel auf anderer Seite liegt
-                if (isLieferschein && !istLieferscheinSeite) {
-                  navigate(filterRechnungId !== undefined
-                    ? `/lieferscheine?filterRechnungId=${filterRechnungId}`
-                    : `/lieferscheine?id=${id}`)
-                  return
-                }
-                if (!isLieferschein && istLieferscheinSeite) {
-                  navigate(`/rechnungen?id=${id}`)
-                  return
-                }
-                setTyp('ausgang')
-                if (filterRechnungId !== undefined) {
-                  setLsFilterRechnungId(filterRechnungId)
-                  const r = (rechnungen ?? []).find(r => r.id === filterRechnungId)
-                  setLsFilterLabel(r?.rechnungsnummer ?? `Rechnung #${filterRechnungId}`)
-                  setSelectedId(null)
-                } else {
-                  setLsFilterRechnungId(null)
-                  setSelectedId(id)
-                }
-              }}
-              onLieferscheinAusRechnung={lieferscheinAktiv ? (id) => lieferscheinAusRechnungMutation.mutate(id) : undefined}
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-500 text-sm">
-              Rechnung auswählen
-            </div>
-          )}
+          <RechnungDetail
+            key={`${selectedId ?? 0}-${detailVersion}`}
+            rechnung={selectedRechnung}
+            onClose={() => setSelectedId(null)}
+            onEdit={() => setFormModus('bearbeiten')}
+            onDelete={() => {
+              if (confirm('Rechnung wirklich löschen?')) {
+                deleteMutation.mutate(selectedRechnung.id)
+              }
+            }}
+            onFinalisiert={(r) => setPendingEditRechnung(r)}
+            onZahlungErfasst={(r) => { setPendingEditRechnung(r); setDetailVersion(v => v + 1) }}
+            onGutschriftCreated={(gs) => { setPendingEditRechnung(gs); setSelectedId(gs.id); setFormModus('bearbeiten') }}
+            onRechnungAusLs={(id) => rechnungAusLsMutation.mutate(id)}
+            onSelectId={(id, isLieferschein, filterRechnungId) => {
+              // Seitenwechsel wenn Ziel auf anderer Seite liegt
+              if (isLieferschein && !istLieferscheinSeite) {
+                navigate(filterRechnungId !== undefined
+                  ? `/lieferscheine?filterRechnungId=${filterRechnungId}`
+                  : `/lieferscheine?id=${id}`)
+                return
+              }
+              if (!isLieferschein && istLieferscheinSeite) {
+                navigate(`/rechnungen?id=${id}`)
+                return
+              }
+              setTyp('ausgang')
+              if (filterRechnungId !== undefined) {
+                setLsFilterRechnungId(filterRechnungId)
+                const r = (rechnungen ?? []).find(r => r.id === filterRechnungId)
+                setLsFilterLabel(r?.rechnungsnummer ?? `Rechnung #${filterRechnungId}`)
+                setSelectedId(null)
+              } else {
+                setLsFilterRechnungId(null)
+                setSelectedId(id)
+              }
+            }}
+            onLieferscheinAusRechnung={lieferscheinAktiv ? (id) => lieferscheinAusRechnungMutation.mutate(id) : undefined}
+          />
         </div>
       )}
 
