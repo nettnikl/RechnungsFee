@@ -33,6 +33,7 @@ from utils.rechnungs_parser import analysiere_datei
 from utils.pdf_kopie import speichere_original_pdf, lade_original_mit_kopie_stempel
 from .schemas_rechnungen import (
     BelegResponse, LieferantVorschlag, RechnungCreate, RechnungUpdate, RechnungResponse,
+    RechnungspositionCreate, pruefe_rechnung_geschaeftsregeln,
     BarZahlungCreate, BarZahlungResult, ZahlungKompakt, AnalyseResponse, ZahlungSplitPosition,
 )
 from .schemas import StornoRequest
@@ -70,6 +71,25 @@ def _belegnr_aus_format(format_str: str, datum: date, nr: int) -> str:
     result = _re.sub(r"#+", _pad, result)
     result = _re.sub(r"NN+", _pad, result)  # dt. Alias: Nummer (mind. 2 N, damit einzelne Buchstaben in Präfixen nicht ersetzt werden)
     return result
+
+
+def _positionen_fuer_pruefung(rechnung: Rechnung, positionen_override: list | None = None) -> list:
+    if positionen_override is not None:
+        return positionen_override
+    return [
+        RechnungspositionCreate(
+            beschreibung=p.beschreibung or "",
+            menge=p.menge,
+            einheit=p.einheit,
+            netto=p.netto,
+            ust_satz=p.ust_satz,
+            artikel_id=p.artikel_id,
+            kategorie_id=p.kategorie_id,
+            differenzbesteuerung=bool(p.differenzbesteuerung),
+            rabatt_prozent=getattr(p, "rabatt_prozent", Decimal("0")) or Decimal("0"),
+        )
+        for p in rechnung.positionen
+    ]
 
 
 def _fmt_menge(n: Decimal) -> str:
@@ -879,6 +899,22 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
     if rechnung.dokument_typ == "Auftrag" and rechnung.auftrag_status not in ("offen", None):
         raise HTTPException(status_code=409, detail="Nur offene Aufträge können bearbeitet werden.")
 
+    is_draft = data.ist_entwurf if data.ist_entwurf is not None else rechnung.ist_entwurf
+    try:
+        pruefe_rechnung_geschaeftsregeln(
+            typ=rechnung.typ,
+            ist_entwurf=is_draft,
+            dokument_typ=rechnung.dokument_typ,
+            kunde_id=data.kunde_id if data.kunde_id is not None else rechnung.kunde_id,
+            lieferant_id=data.lieferant_id if data.lieferant_id is not None else rechnung.lieferant_id,
+            partner_freitext=(
+                data.partner_freitext if data.partner_freitext is not None else rechnung.partner_freitext
+            ),
+            positionen=_positionen_fuer_pruefung(rechnung, data.positionen),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
     unternehmen = db.query(Unternehmen).first()
     ist_kleinunternehmer = unternehmen.ist_kleinunternehmer if unternehmen else False
 
@@ -1008,6 +1044,19 @@ def finalisiere_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
     if not rechnung.ist_entwurf:
         raise HTTPException(status_code=409, detail="Rechnung ist bereits finalisiert.")
+
+    try:
+        pruefe_rechnung_geschaeftsregeln(
+            typ=rechnung.typ,
+            ist_entwurf=False,
+            dokument_typ=rechnung.dokument_typ,
+            kunde_id=rechnung.kunde_id,
+            lieferant_id=rechnung.lieferant_id,
+            partner_freitext=rechnung.partner_freitext,
+            positionen=_positionen_fuer_pruefung(rechnung),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
     # Gutschrift: Summen-Check – darf den Original-Bruttobetrag nicht überschreiten
     if rechnung.dokument_typ == "Gutschrift" and rechnung.gutschrift_zu_rechnung_id:

@@ -137,11 +137,16 @@ class RechnungCreate(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def check_netto_positionen(self) -> "RechnungCreate":
-        if self.dokument_typ not in ("Lieferschein", "Angebot", "Proforma"):
-            for pos in self.positionen:
-                if pos.netto == 0:
-                    raise ValueError("Position netto darf nicht 0 sein")
+    def check_geschaeftsregeln(self) -> "RechnungCreate":
+        pruefe_rechnung_geschaeftsregeln(
+            typ=self.typ,
+            ist_entwurf=self.ist_entwurf,
+            dokument_typ=self.dokument_typ,
+            kunde_id=self.kunde_id,
+            lieferant_id=self.lieferant_id,
+            partner_freitext=self.partner_freitext,
+            positionen=self.positionen,
+        )
         return self
 
     # Direkt-Übernahme aus XML-Import – überschreibt die berechneten Gesamtbeträge
@@ -162,14 +167,6 @@ class RechnungCreate(BaseModel):
         if not v:
             raise ValueError("Mindestens eine Position erforderlich")
         return v
-
-    @model_validator(mode="after")
-    def check_partner(self) -> "RechnungCreate":
-        if self.typ == "ausgang" and not self.kunde_id and not self.partner_freitext:
-            raise ValueError("Ausgangsrechnung benötigt einen Kunden oder partner_freitext")
-        if self.typ == "eingang" and not self.lieferant_id and not self.partner_freitext:
-            raise ValueError("Eingangsrechnung benötigt einen Lieferanten oder partner_freitext")
-        return self
 
 
 class RechnungUpdate(BaseModel):
@@ -195,6 +192,31 @@ class RechnungUpdate(BaseModel):
     gueltig_bis: Optional[date] = None
     dokumentenpaket_id: Optional[int] = None
     positionen: Optional[List[RechnungspositionCreate]] = None
+
+
+def pruefe_rechnung_geschaeftsregeln(
+    *,
+    typ: str,
+    ist_entwurf: bool,
+    dokument_typ: str,
+    kunde_id: Optional[int],
+    lieferant_id: Optional[int],
+    partner_freitext: Optional[str],
+    positionen: List[RechnungspositionCreate],
+) -> None:
+    """Pflichtfelder für Rechnungen – Entwürfe nur mit Mindeststruktur, Finalisierung streng."""
+    if not positionen:
+        raise ValueError("Mindestens eine Position erforderlich")
+    if ist_entwurf:
+        return
+    if typ == "ausgang" and not kunde_id and not partner_freitext:
+        raise ValueError("Ausgangsrechnung benötigt einen Kunden oder partner_freitext")
+    if typ == "eingang" and not lieferant_id and not partner_freitext:
+        raise ValueError("Eingangsrechnung benötigt einen Lieferanten oder partner_freitext")
+    if dokument_typ not in ("Lieferschein", "Angebot", "Proforma"):
+        for pos in positionen:
+            if pos.netto == 0:
+                raise ValueError("Position netto darf nicht 0 sein")
 
 
 # Kompakte Zahlungsinfo für die Rechnung-Response

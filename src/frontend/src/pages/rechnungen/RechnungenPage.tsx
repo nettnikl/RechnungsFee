@@ -2403,13 +2403,20 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
 
   function handleSubmit(e: React.FormEvent, istEntwurf: boolean) {
     e.preventDefault()
-    if (typ === 'ausgang' && !partnerId && !partnerFreitext.trim()) {
-      alert('Bitte einen Kunden auswählen oder einen Namen im Kundenfeld eingeben.')
-      return
-    }
-    if (positionen.every((p) => !p.beschreibung.trim())) {
-      alert('Bitte mindestens eine Position mit Beschreibung eingeben.')
-      return
+    const finalize = !istEntwurf
+    if (finalize) {
+      if (typ === 'ausgang' && !partnerId && !partnerFreitext.trim()) {
+        alert('Bitte einen Kunden auswählen oder einen Namen im Kundenfeld eingeben.')
+        return
+      }
+      if (typ === 'eingang' && !partnerId && !partnerFreitext.trim()) {
+        alert('Bitte einen Lieferanten auswählen oder einen Namen eintragen.')
+        return
+      }
+      if (positionen.every((p) => !p.beschreibung.trim())) {
+        alert('Bitte mindestens eine Position mit Beschreibung eingeben.')
+        return
+      }
     }
     onSave(buildData(istEntwurf))
   }
