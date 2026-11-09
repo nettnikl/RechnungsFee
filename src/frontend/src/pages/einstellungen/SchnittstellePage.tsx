@@ -179,6 +179,31 @@ export function SchnittstellePage() {
       )}
 
       {data && !data.aktiv && fehler && <p className="text-sm text-red-600">{fehler}</p>}
+
+      {data && (
+        <section className="space-y-3">
+          <h2 className={abschnittCls}>Werkzeuge</h2>
+          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-900 text-xs text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                  <th className="text-left px-4 py-2.5 font-medium">Name</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.werkzeuge.map((name, i) => (
+                  <tr
+                    key={name}
+                    className={`border-b border-slate-100 dark:border-slate-700 last:border-0 ${i % 2 === 0 ? '' : 'bg-slate-50/50 dark:bg-slate-900/30'}`}
+                  >
+                    <td className="px-4 py-2 font-mono text-slate-800 dark:text-slate-100">{name}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </div>
   )
 }

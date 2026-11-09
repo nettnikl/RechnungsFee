@@ -84,6 +84,7 @@ def test_api_token_unsichtbar_wenn_aus(tmp_path, monkeypatch):
     monkeypatch.setattr(mcp_laufzeit, "SessionLocal", Session)
     with Session() as db:
         assert lesen(db).token is None
+        assert "rechnungen_liste" in lesen(db).werkzeuge
         assert mcp_laufzeit._pruefe(None) == 404
 
         an = einschalten(db)

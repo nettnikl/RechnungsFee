@@ -6,6 +6,7 @@ Session durch. Solange die Schnittstelle aus ist, antwortet der Pfad mit 404.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 from typing import Any
@@ -122,6 +123,17 @@ def baue_server():
         return _ausfuehren(UMFANG_LESEN, lesen.ust_saetze)
 
     return mcp
+
+
+_werkzeug_namen: list[str] | None = None
+
+
+def werkzeug_namen() -> list[str]:
+    global _werkzeug_namen
+    if _werkzeug_namen is None:
+        server = baue_server()
+        _werkzeug_namen = [werkzeug.name for werkzeug in asyncio.run(server.list_tools())]
+    return list(_werkzeug_namen)
 
 
 def _kopf(scope: dict[str, Any], name: str) -> str | None:

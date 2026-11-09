@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from database.connection import get_db
 from database.models import Unternehmen
 
+from .mcp_laufzeit import werkzeug_namen
 from .schnittstelle_kern import (
     UMFANG_LESEN,
     aktivieren,
@@ -22,6 +23,7 @@ class SchnittstelleStatus(BaseModel):
     aktiv: bool
     token: str | None
     umfang: str
+    werkzeuge: list[str]
 
 
 def _zeile(db: Session) -> Unternehmen:
@@ -36,6 +38,7 @@ def _status(firma: Unternehmen) -> SchnittstelleStatus:
         aktiv=bool(firma.mcp_aktiv),
         token=sichtbares_token(firma),
         umfang=firma.mcp_umfang or UMFANG_LESEN,
+        werkzeuge=werkzeug_namen(),
     )
 
 
