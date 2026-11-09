@@ -10,6 +10,25 @@ import {
 } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
 
+const labelCls = 'block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1'
+const inputCls = 'w-full min-w-0 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100'
+const abschnittCls = 'text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide'
+
+function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 disabled:opacity-50 ${checked ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'}`}
+    >
+      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-4' : 'translate-x-0.5'}`} />
+    </button>
+  )
+}
+
 async function mcpAdresse(): Promise<string> {
   if (isTauri() && !import.meta.env.DEV) {
     const port = await invoke<number>('get_backend_port')
@@ -81,34 +100,30 @@ export function SchnittstellePage() {
       {error && <p className="text-sm text-red-600">{(error as Error).message}</p>}
 
       {data && (
-        <section className="space-y-4">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={data.aktiv}
+        <div className="flex items-center justify-between border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3">
+          <div>
+            <p className="text-sm font-medium text-slate-800 dark:text-slate-100">MCP aktivieren</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Schaltet die MCP-Endpunkte ein.</p>
+          </div>
+          <Toggle
+            checked={data.aktiv}
             disabled={schalter.isPending}
-            onClick={() => {
+            onChange={(an) => {
               setHinweis(null)
-              schalter.mutate(!data.aktiv)
+              schalter.mutate(an)
             }}
-            className="flex items-center justify-between w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-left"
-          >
-            <span className="text-sm font-medium text-slate-800 dark:text-slate-100">MCP</span>
-            <span className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${data.aktiv ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
-              <span className={`inline-block h-5 w-5 mt-0.5 rounded-full bg-white transition-transform ${data.aktiv ? 'translate-x-5' : 'translate-x-0.5'}`} />
-            </span>
-          </button>
+          />
+        </div>
+      )}
 
-          {data.aktiv && data.token && (
-            <div className="space-y-2">
-              <label htmlFor="api-token" className="text-sm font-medium text-slate-700 dark:text-slate-300">Token</label>
+      {data?.aktiv && data.token && (
+        <section className="space-y-3">
+          <h2 className={abschnittCls}>Token</h2>
+          <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-4 space-y-4">
+            <div>
+              <label htmlFor="api-token" className={labelCls}>Token</label>
               <div className="flex gap-2">
-                <input
-                  id="api-token"
-                  readOnly
-                  value={data.token}
-                  className="flex-1 min-w-0 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-sm font-mono text-slate-800 dark:text-slate-100"
-                />
+                <input id="api-token" readOnly value={data.token} className={inputCls} />
                 <button
                   type="button"
                   title="Kopieren"
@@ -134,33 +149,36 @@ export function SchnittstellePage() {
                 </button>
               </div>
             </div>
-          )}
 
-          {data.aktiv && adresse && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">MCP-Adresse</p>
-              <p className="text-sm font-mono text-slate-600 dark:text-slate-300 break-all">{adresse}</p>
-              {snippet && (
-                <div className="relative">
-                  <pre className="rounded-lg bg-slate-900 text-slate-100 text-xs p-3 pr-12 overflow-x-auto">{snippet}</pre>
-                  <button
-                    type="button"
-                    title="Konfiguration kopieren"
-                    aria-label="Konfiguration kopieren"
-                    onClick={() => kopieren(snippet, 'Konfiguration kopiert.')}
-                    className="absolute top-2 right-2 inline-flex items-center justify-center rounded-md w-7 h-7 text-slate-300 hover:bg-slate-800"
-                  >
-                    <span className="material-symbols-outlined leading-none" style={{ fontSize: '1.1rem' }}>content_copy</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+            {adresse && (
+              <div>
+                <p className={labelCls}>MCP-Adresse</p>
+                <p className="text-sm font-mono text-slate-800 dark:text-slate-100 break-all">{adresse}</p>
+              </div>
+            )}
 
-          {hinweis && <p className="text-sm text-emerald-700 dark:text-emerald-400">{hinweis}</p>}
-          {fehler && <p className="text-sm text-red-600">{fehler}</p>}
+            {snippet && (
+              <div className="relative">
+                <pre className="rounded-lg bg-slate-900 text-slate-100 text-xs p-3 pr-12 overflow-x-auto">{snippet}</pre>
+                <button
+                  type="button"
+                  title="Konfiguration kopieren"
+                  aria-label="Konfiguration kopieren"
+                  onClick={() => kopieren(snippet, 'Konfiguration kopiert.')}
+                  className="absolute top-2 right-2 inline-flex items-center justify-center rounded-md w-7 h-7 text-slate-300 hover:bg-slate-800"
+                >
+                  <span className="material-symbols-outlined leading-none" style={{ fontSize: '1.1rem' }}>content_copy</span>
+                </button>
+              </div>
+            )}
+
+            {hinweis && <p className="text-sm text-emerald-700 dark:text-emerald-400">{hinweis}</p>}
+            {fehler && <p className="text-sm text-red-600">{fehler}</p>}
+          </div>
         </section>
       )}
+
+      {data && !data.aktiv && fehler && <p className="text-sm text-red-600">{fehler}</p>}
     </div>
   )
 }
