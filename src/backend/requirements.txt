@@ -29,3 +29,6 @@ smbprotocol
 --no-binary charset-normalizer
 charset-normalizer
 defusedxml
+# Lokale KI-Schnittstelle. Wird mit dem Backend geladen, der Endpunkt antwortet
+# aber nur, solange die Schnittstelle in den Einstellungen an ist.
+mcp>=2.3,<3

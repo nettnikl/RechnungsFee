@@ -215,6 +215,11 @@ class Unternehmen(Base):
     datenmigration_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     # Dashboard-Konfiguration (JSON: widget_order, widget_visibility, quicklinks)
     dashboard_config: Mapped[str | None] = mapped_column(Text)
+    # Lokale KI-Schnittstelle. Der Token bleibt beim Ausschalten erhalten und wird
+    # nur über „Token erneuern“ ersetzt. mcp_umfang: lesen < entwuerfe < voll.
+    mcp_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    mcp_token: Mapped[str | None] = mapped_column(Text)
+    mcp_umfang: Mapped[str] = mapped_column(String(20), default="lesen", server_default="lesen", nullable=False)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

@@ -35,7 +35,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 182
+SCHEMA_VERSION = 183
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -122,6 +122,13 @@ app.include_router(cockpit.router)
 app.include_router(datenmigration.router)
 app.include_router(mahnwesen.router)
 app.include_router(rechnungen_import.router)
+from api.schnittstelle import router as schnittstelle_router  # noqa: E402
+
+app.include_router(schnittstelle_router)
+
+from api.mcp_laufzeit import mcp_asgi  # noqa: E402
+
+app.mount("/mcp", mcp_asgi())
 
 
 @app.post("/api/shutdown")
@@ -4203,6 +4210,20 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 182 (Issue #491/#492: Kleinunternehmergrenze, steuerfreie Umsätze § 4)")
 
+    if version < 183:
+        with engine.connect() as conn:
+            _u183 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            for _spalte, _typ in [
+                ("mcp_aktiv", "BOOLEAN NOT NULL DEFAULT 0"),
+                ("mcp_token", "TEXT"),
+                ("mcp_umfang", "VARCHAR(20) NOT NULL DEFAULT 'lesen'"),
+            ]:
+                if _u183 and _spalte not in _u183:
+                    conn.execute(text(f"ALTER TABLE unternehmen ADD COLUMN {_spalte} {_typ}"))
+            conn.execute(text("PRAGMA user_version = 183"))
+            conn.commit()
+            print("[Migration] Schema auf Version 183 (Schnittstelle: MCP ein/aus, Token, Umfang)")
+
 
 def _migrate_kategorien() -> None:
     """EKS-Zuordnungen auf offizielles Formular (04/2025) bringen und fehlende Kategorien eintragen."""
@@ -4699,6 +4720,18 @@ def _migrate_signaturen_sicher() -> None:
         )
     finally:
         _setup_gobd_triggers()
+
+
+@app.on_event("startup")
+async def _mcp_lebenszyklus_starten():
+    from api.mcp_laufzeit import lebenszyklus_starten
+    await lebenszyklus_starten()
+
+
+@app.on_event("shutdown")
+async def _mcp_lebenszyklus_stoppen():
+    from api.mcp_laufzeit import lebenszyklus_stoppen
+    await lebenszyklus_stoppen()
 
 
 @app.on_event("startup")
