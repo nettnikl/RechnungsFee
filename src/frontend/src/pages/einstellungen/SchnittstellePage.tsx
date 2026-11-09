@@ -7,6 +7,7 @@ import {
   schnittstelleAktivieren,
   schnittstelleDeaktivieren,
   schnittstelleTokenRotieren,
+  schnittstelleWerkzeug,
 } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
 
@@ -59,6 +60,11 @@ export function SchnittstellePage() {
 
   const schalter = useMutation({
     mutationFn: (an: boolean) => (an ? schnittstelleAktivieren() : schnittstelleDeaktivieren()),
+    onSuccess: merken,
+    onError: (err: Error) => setFehler(err.message),
+  })
+  const werkzeug = useMutation({
+    mutationFn: ({ name, an }: { name: string; an: boolean }) => schnittstelleWerkzeug(name, an),
     onSuccess: merken,
     onError: (err: Error) => setFehler(err.message),
   })
@@ -188,15 +194,28 @@ export function SchnittstellePage() {
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-900 text-xs text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
                   <th className="text-left px-4 py-2.5 font-medium">Name</th>
+                  <th className="text-right px-4 py-2.5 font-medium w-16">An</th>
                 </tr>
               </thead>
               <tbody>
-                {data.werkzeuge.map((name, i) => (
+                {data.werkzeuge.map((zeile, i) => (
                   <tr
-                    key={name}
-                    className={`border-b border-slate-100 dark:border-slate-700 last:border-0 ${i % 2 === 0 ? '' : 'bg-slate-50/50 dark:bg-slate-900/30'}`}
+                    key={zeile.name}
+                    className={`border-b border-slate-100 dark:border-slate-700 last:border-0 ${i % 2 === 0 ? '' : 'bg-slate-50/50 dark:bg-slate-900/30'} ${zeile.an ? '' : 'opacity-40'}`}
                   >
-                    <td className="px-4 py-2 font-mono text-slate-800 dark:text-slate-100">{name}</td>
+                    <td className="px-4 py-2 font-mono text-slate-800 dark:text-slate-100">{zeile.name}</td>
+                    <td className="px-4 py-2">
+                      <div className="flex justify-end">
+                        <Toggle
+                          checked={zeile.an}
+                          disabled={werkzeug.isPending}
+                          onChange={(an) => {
+                            setHinweis(null)
+                            werkzeug.mutate({ name: zeile.name, an })
+                          }}
+                        />
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

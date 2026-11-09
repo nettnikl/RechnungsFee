@@ -3525,11 +3525,13 @@ export async function downloadMahnungPdfForMail(mahnungId: number): Promise<void
   await _triggerBlobDownload(blob, match?.[1]?.trim() ?? 'mahnung.pdf')
 }
 
+export type SchnittstelleWerkzeug = { name: string; an: boolean }
+
 export type SchnittstelleStatus = {
   aktiv: boolean
   token: string | null
   umfang: string
-  werkzeuge: string[]
+  werkzeuge: SchnittstelleWerkzeug[]
 }
 
 export const getSchnittstelle = () => request<SchnittstelleStatus>('/schnittstelle')
@@ -3539,3 +3541,5 @@ export const schnittstelleDeaktivieren = () =>
   request<SchnittstelleStatus>('/schnittstelle/deaktivieren', { method: 'POST' })
 export const schnittstelleTokenRotieren = () =>
   request<SchnittstelleStatus>('/schnittstelle/token-rotieren', { method: 'POST' })
+export const schnittstelleWerkzeug = (name: string, an: boolean) =>
+  request<SchnittstelleStatus>('/schnittstelle/werkzeug', { method: 'POST', body: JSON.stringify({ name, an }) })

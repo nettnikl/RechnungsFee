@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 import main
 from api import mcp_laufzeit
-from api.schnittstelle import ausschalten, einschalten, lesen, token_rotieren
+from api.schnittstelle import WerkzeugSchaltung, ausschalten, einschalten, lesen, token_rotieren, werkzeug_schalten
 from api.schnittstelle_kern import (
     UMFANG_ENTWUERFE,
     UMFANG_LESEN,
@@ -84,13 +84,20 @@ def test_api_token_unsichtbar_wenn_aus(tmp_path, monkeypatch):
     monkeypatch.setattr(mcp_laufzeit, "SessionLocal", Session)
     with Session() as db:
         assert lesen(db).token is None
-        assert "rechnungen_liste" in lesen(db).werkzeuge
+        assert "rechnungen_liste" in {werkzeug.name for werkzeug in lesen(db).werkzeuge}
+        assert all(werkzeug.an for werkzeug in lesen(db).werkzeuge)
         assert mcp_laufzeit._pruefe(None) == 404
 
         an = einschalten(db)
         assert an.aktiv is True
         token = an.token
         assert token
+        aus_werkzeug = werkzeug_schalten(WerkzeugSchaltung(name="kunden_liste", an=False), db)
+        zeile = next(werkzeug for werkzeug in aus_werkzeug.werkzeuge if werkzeug.name == "kunden_liste")
+        assert zeile.an is False
+        wieder_an = werkzeug_schalten(WerkzeugSchaltung(name="kunden_liste", an=True), db)
+        zeile = next(werkzeug for werkzeug in wieder_an.werkzeuge if werkzeug.name == "kunden_liste")
+        assert zeile.an is True
 
         aus = ausschalten(db)
         assert aus.aktiv is False
@@ -243,8 +250,8 @@ def test_migration_183(tmp_path, monkeypatch):
     with engine.connect() as conn:
         spalten = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)"))}
         version = conn.execute(text("PRAGMA user_version")).scalar()
-    assert version == 183
-    assert {"mcp_aktiv", "mcp_token", "mcp_umfang"} <= spalten
+    assert version == 184
+    assert {"mcp_aktiv", "mcp_token", "mcp_umfang", "mcp_werkzeuge_aus"} <= spalten
 
 
 def test_ohne_firma_ist_404(tmp_path):

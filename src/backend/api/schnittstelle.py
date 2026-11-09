@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from database.connection import get_db
 from database.models import Unternehmen
 
-from .mcp_laufzeit import werkzeug_namen
+from .mcp_laufzeit import setze_werkzeug, werkzeuge_fuer
 from .schnittstelle_kern import (
     UMFANG_LESEN,
     aktivieren,
@@ -19,11 +19,21 @@ from .schnittstelle_kern import (
 router = APIRouter(prefix="/api/schnittstelle", tags=["Schnittstelle"])
 
 
+class WerkzeugStatus(BaseModel):
+    name: str
+    an: bool
+
+
+class WerkzeugSchaltung(BaseModel):
+    name: str
+    an: bool
+
+
 class SchnittstelleStatus(BaseModel):
     aktiv: bool
     token: str | None
     umfang: str
-    werkzeuge: list[str]
+    werkzeuge: list[WerkzeugStatus]
 
 
 def _zeile(db: Session) -> Unternehmen:
@@ -38,7 +48,7 @@ def _status(firma: Unternehmen) -> SchnittstelleStatus:
         aktiv=bool(firma.mcp_aktiv),
         token=sichtbares_token(firma),
         umfang=firma.mcp_umfang or UMFANG_LESEN,
-        werkzeuge=werkzeug_namen(),
+        werkzeuge=werkzeuge_fuer(firma),
     )
 
 
@@ -60,6 +70,18 @@ def einschalten(db: Session = Depends(get_db)) -> SchnittstelleStatus:
 def ausschalten(db: Session = Depends(get_db)) -> SchnittstelleStatus:
     firma = _zeile(db)
     deaktivieren(firma)
+    db.commit()
+    db.refresh(firma)
+    return _status(firma)
+
+
+@router.post("/werkzeug", response_model=SchnittstelleStatus)
+def werkzeug_schalten(daten: WerkzeugSchaltung, db: Session = Depends(get_db)) -> SchnittstelleStatus:
+    firma = _zeile(db)
+    try:
+        setze_werkzeug(firma, daten.name, daten.an)
+    except ValueError as fehler:
+        raise HTTPException(status_code=404, detail="Werkzeug nicht gefunden.") from fehler
     db.commit()
     db.refresh(firma)
     return _status(firma)

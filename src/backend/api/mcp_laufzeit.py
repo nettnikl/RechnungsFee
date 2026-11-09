@@ -136,6 +136,45 @@ def werkzeug_namen() -> list[str]:
     return list(_werkzeug_namen)
 
 
+def namen_aus(roh: str | None) -> set[str]:
+    if not roh:
+        return set()
+    try:
+        werte = json.loads(roh)
+    except json.JSONDecodeError:
+        return set()
+    if not isinstance(werte, list):
+        return set()
+    return {str(name) for name in werte}
+
+
+def werkzeuge_fuer(firma) -> list[dict[str, Any]]:
+    aus = namen_aus(getattr(firma, "mcp_werkzeuge_aus", None))
+    return [{"name": name, "an": name not in aus} for name in werkzeug_namen()]
+
+
+def setze_werkzeug(firma, name: str, an: bool) -> None:
+    if name not in set(werkzeug_namen()):
+        raise ValueError(name)
+    aus = namen_aus(firma.mcp_werkzeuge_aus)
+    if an:
+        aus.discard(name)
+    else:
+        aus.add(name)
+    firma.mcp_werkzeuge_aus = json.dumps(sorted(aus), ensure_ascii=False) if aus else None
+
+
+def ausgeschlossene_werkzeuge() -> set[str]:
+    db = SessionLocal()
+    try:
+        firma = db.query(Unternehmen).first()
+        if firma is None:
+            return set()
+        return namen_aus(firma.mcp_werkzeuge_aus)
+    finally:
+        db.close()
+
+
 def _kopf(scope: dict[str, Any], name: str) -> str | None:
     gesucht = name.lower().encode()
     for schluessel, wert in scope.get("headers") or []:
@@ -194,11 +233,33 @@ _inner = None
 _stack: contextlib.AsyncExitStack | None = None
 
 
+def _nur_eingeschaltete(server) -> None:
+    from mcp.server.mcpserver.exceptions import ToolError
+
+    original_list = server.list_tools
+    original_call = server.call_tool
+
+    async def list_tools():
+        alle = await original_list()
+        aus = ausgeschlossene_werkzeuge()
+        return [werkzeug for werkzeug in alle if werkzeug.name not in aus]
+
+    async def call_tool(name, arguments, context=None):
+        if name in ausgeschlossene_werkzeuge():
+            raise ToolError("Dieses Werkzeug ist ausgeschaltet.")
+        return await original_call(name, arguments, context)
+
+    server.list_tools = list_tools
+    server.call_tool = call_tool
+
+
 def mcp_asgi():
     global _inner
     from mcp.server.transport_security import TransportSecuritySettings
 
-    _inner = baue_server().streamable_http_app(
+    server = baue_server()
+    _nur_eingeschaltete(server)
+    _inner = server.streamable_http_app(
         streamable_http_path="/",
         stateless_http=True,
         host="127.0.0.1",
