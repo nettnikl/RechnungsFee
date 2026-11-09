@@ -3524,3 +3524,7 @@ export async function downloadMahnungPdfForMail(mahnungId: number): Promise<void
   const match = cd.match(/filename[*]?=(?:UTF-8''|"?)([^";\r\n]+)/i)
   await _triggerBlobDownload(blob, match?.[1]?.trim() ?? 'mahnung.pdf')
 }
+
+export type SchnittstelleStatus = { aktiv: boolean; token: string | null; umfang: string }
+
+export const getSchnittstelle = () => request<SchnittstelleStatus>('/schnittstelle')

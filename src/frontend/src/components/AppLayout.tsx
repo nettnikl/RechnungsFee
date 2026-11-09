@@ -72,6 +72,7 @@ const einstellungenNav = [
   { to: '/mahnwesen-einstellungen', label: 'Mahnwesen',  icon: 'gavel' },
   { to: '/vorlagen',         label: 'Rechnungsvorlagen', icon: 'file_copy' },
   { to: '/unternehmen',      label: 'Unternehmen',       icon: 'business' },
+  { to: '/schnittstelle',    label: 'MCP',               icon: 'hub' },
 ]
 
 const buchhaltungPfade   = [...buchhaltungNavBase.map(n => n.to), '/buchungsvorlagen', ...buchhaltungNavOptional.map(n => n.to)]

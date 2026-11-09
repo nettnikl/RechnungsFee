@@ -50,6 +50,7 @@ import { FristenPage } from './pages/fristen/FristenPage'
 import { BankImportPage } from './pages/bank-import/BankImportPage'
 import { DatensmigrationsPage } from './pages/datenmigration/DatensmigrationsPage'
 import { AnsichtPage } from './pages/einstellungen/AnsichtPage'
+import { SchnittstellePage } from './pages/einstellungen/SchnittstellePage'
 import { AnsichtContext, useAnsichtState } from './hooks/useAnsicht'
 
 function AppRoutes() {
@@ -150,6 +151,7 @@ function AppRoutes() {
           <Route path="/bank-import" element={<BankImportPage />} />
           <Route path="/datenmigration" element={<DatensmigrationsPage />} />
           <Route path="/ansicht" element={<AnsichtPage />} />
+          <Route path="/schnittstelle" element={<SchnittstellePage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/backup" element={<BackupPage />} />
           <Route path="/info" element={<InfoPage />} />
