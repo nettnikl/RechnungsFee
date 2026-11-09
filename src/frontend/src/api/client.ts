@@ -3532,3 +3532,5 @@ export const schnittstelleAktivieren = () =>
   request<SchnittstelleStatus>('/schnittstelle/aktivieren', { method: 'POST' })
 export const schnittstelleDeaktivieren = () =>
   request<SchnittstelleStatus>('/schnittstelle/deaktivieren', { method: 'POST' })
+export const schnittstelleTokenRotieren = () =>
+  request<SchnittstelleStatus>('/schnittstelle/token-rotieren', { method: 'POST' })
