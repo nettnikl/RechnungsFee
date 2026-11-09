@@ -3528,3 +3528,7 @@ export async function downloadMahnungPdfForMail(mahnungId: number): Promise<void
 export type SchnittstelleStatus = { aktiv: boolean; token: string | null; umfang: string }
 
 export const getSchnittstelle = () => request<SchnittstelleStatus>('/schnittstelle')
+export const schnittstelleAktivieren = () =>
+  request<SchnittstelleStatus>('/schnittstelle/aktivieren', { method: 'POST' })
+export const schnittstelleDeaktivieren = () =>
+  request<SchnittstelleStatus>('/schnittstelle/deaktivieren', { method: 'POST' })
