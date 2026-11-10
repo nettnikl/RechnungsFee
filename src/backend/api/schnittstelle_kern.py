@@ -39,6 +39,12 @@ def neuer_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+def setze_umfang(zeile: Schnittstelle, umfang: str) -> None:
+    if umfang not in _RANG:
+        raise ValueError(umfang)
+    zeile.mcp_umfang = umfang
+
+
 def darf(aktuell: str | None, benoetigt: str) -> bool:
     try:
         return _RANG[aktuell or ""] >= _RANG[benoetigt]

@@ -10,7 +10,16 @@ from sqlalchemy.orm import sessionmaker
 
 import main
 from api import mcp_laufzeit
-from api.schnittstelle import WerkzeugSchaltung, ausschalten, einschalten, lesen, token_rotieren, werkzeug_schalten
+from api.schnittstelle import (
+    UmfangSchaltung,
+    WerkzeugSchaltung,
+    ausschalten,
+    einschalten,
+    lesen,
+    token_rotieren,
+    umfang_setzen,
+    werkzeug_schalten,
+)
 from api.schnittstelle_kern import (
     UMFANG_ENTWUERFE,
     UMFANG_LESEN,
@@ -47,6 +56,17 @@ def test_rotieren_nur_wenn_an():
     zeile.mcp_aktiv = True
     rotieren(zeile)
     assert zeile.mcp_token != "alt"
+
+
+def test_umfang_blendet_hoehere_stufe_aus():
+    mcp_laufzeit._stufen["kunden_liste"] = UMFANG_VOLL
+    try:
+        zeile = SimpleNamespace(mcp_umfang=UMFANG_LESEN, mcp_werkzeuge_aus=None)
+        assert mcp_laufzeit.werkzeug_gesperrt(zeile, "kunden_liste")
+        zeile.mcp_umfang = UMFANG_VOLL
+        assert not mcp_laufzeit.werkzeug_gesperrt(zeile, "kunden_liste")
+    finally:
+        mcp_laufzeit._stufen["kunden_liste"] = UMFANG_LESEN
 
 
 def test_umfang_leiter():
@@ -115,6 +135,21 @@ def test_api_token_unsichtbar_wenn_aus(tmp_path, monkeypatch):
         assert _status(lambda: token_rotieren(db)) == 409
         assert db.query(Unternehmen).one().mcp_token == neu.token
         assert db.query(Unternehmen).one().mcp_umfang == UMFANG_LESEN
+        mcp_laufzeit._stufen["kunden_liste"] = UMFANG_VOLL
+        try:
+            entwuerfe = umfang_setzen(UmfangSchaltung(umfang="entwuerfe"), db)
+            flags = {werkzeug.name: werkzeug.an for werkzeug in entwuerfe.werkzeuge}
+            assert db.query(Unternehmen).one().mcp_umfang == "entwuerfe"
+            assert flags["rechnungen_liste"] is True
+            assert flags["eingangsrechnung_anlegen"] is True
+            assert flags["kunden_liste"] is False
+            assert flags["eingangsrechnung_stornieren"] is False
+        finally:
+            mcp_laufzeit._stufen["kunden_liste"] = UMFANG_LESEN
+        assert _status(lambda: umfang_setzen(UmfangSchaltung(umfang="anders"), db)) == 422
+        wieder_lesen = umfang_setzen(UmfangSchaltung(umfang="lesen"), db)
+        assert all(werkzeug.an for werkzeug in wieder_lesen.werkzeuge if werkzeug.stufe == "lesen")
+        assert all(not werkzeug.an for werkzeug in wieder_lesen.werkzeuge if werkzeug.stufe != "lesen")
 
 
 def test_mcp_tor_und_werkzeuge(tmp_path, monkeypatch):
@@ -144,8 +179,9 @@ def test_mcp_tor_und_werkzeuge(tmp_path, monkeypatch):
 
     server = mcp_laufzeit.baue_server()
     namen = {werkzeug.name for werkzeug in asyncio.run(server.list_tools())}
-    assert {"rechnungen_liste", "kontenrahmen", "kunden_liste"} <= namen
-    assert not any("anlegen" in name or "storno" in name or "loesch" in name for name in namen)
+    assert {"rechnungen_liste", "kontenrahmen", "kunden_liste", "eingangsrechnung_anlegen", "eingangsrechnung_beleg"} <= namen
+    assert mcp_laufzeit._stufen["eingangsrechnung_anlegen"] == UMFANG_ENTWUERFE
+    assert mcp_laufzeit._stufen["eingangsrechnung_stornieren"] == UMFANG_VOLL
 
     text_ausgabe = mcp_laufzeit._ausfuehren(UMFANG_ENTWUERFE, lambda db: {"ok": True})
     assert "nicht frei" in text_ausgabe
@@ -224,7 +260,7 @@ def test_mcp_http_nur_wenn_aktiv(tmp_path, monkeypatch):
     ohne, mit, kurz = asyncio.run(lauf())
     assert ohne[0] == 401
     assert mit[0] == 200
-    assert b"Nur-Lese-Zugriff" in mit[1]
+    assert b"Lesen + Entw" in mit[1]
     assert kurz[0] == 307
 
     with Session() as session:

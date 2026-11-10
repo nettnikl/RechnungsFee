@@ -7,6 +7,7 @@ import {
   schnittstelleAktivieren,
   schnittstelleDeaktivieren,
   schnittstelleTokenRotieren,
+  schnittstelleUmfang,
   schnittstelleWerkzeug,
 } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
@@ -14,6 +15,18 @@ import { useMxAuto } from '../../hooks/useAnsicht'
 const labelCls = 'block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1'
 const inputCls = 'w-full min-w-0 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100'
 const abschnittCls = 'text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide'
+
+const VORGABEN = [
+  { id: 'lesen', titel: 'Nur lesen' },
+  { id: 'entwuerfe', titel: 'Lesen + Entwürfe' },
+  { id: 'voll', titel: 'Alles' },
+] as const
+
+const RANG: Record<string, number> = { lesen: 1, entwuerfe: 2, voll: 3 }
+
+function erlaubt(umfang: string, stufe: string) {
+  return (RANG[umfang] ?? 0) >= (RANG[stufe] ?? 0)
+}
 
 function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
@@ -60,6 +73,11 @@ export function SchnittstellePage() {
 
   const schalter = useMutation({
     mutationFn: (an: boolean) => (an ? schnittstelleAktivieren() : schnittstelleDeaktivieren()),
+    onSuccess: merken,
+    onError: (err: Error) => setFehler(err.message),
+  })
+  const umfang = useMutation({
+    mutationFn: schnittstelleUmfang,
     onSuccess: merken,
     onError: (err: Error) => setFehler(err.message),
   })
@@ -188,6 +206,35 @@ export function SchnittstellePage() {
 
       {data && (
         <section className="space-y-3">
+          <h2 className={abschnittCls}>Vorgabe</h2>
+          <div className="grid grid-cols-3 gap-2">
+            {VORGABEN.map((vorgabe) => {
+              const aktiv = data.umfang === vorgabe.id
+              return (
+                <button
+                  key={vorgabe.id}
+                  type="button"
+                  disabled={umfang.isPending}
+                  onClick={() => {
+                    setHinweis(null)
+                    umfang.mutate(vorgabe.id)
+                  }}
+                  className={`px-3 py-2 rounded-xl border-2 text-sm font-medium ${
+                    aktiv
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:border-indigo-400 dark:text-indigo-300'
+                      : 'border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-600'
+                  }`}
+                >
+                  {vorgabe.titel}
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      {data && (
+        <section className="space-y-3">
           <h2 className={abschnittCls}>Werkzeuge</h2>
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto">
             <table className="w-full text-sm">
@@ -198,26 +245,29 @@ export function SchnittstellePage() {
                 </tr>
               </thead>
               <tbody>
-                {data.werkzeuge.map((zeile, i) => (
-                  <tr
-                    key={zeile.name}
-                    className={`border-b border-slate-100 dark:border-slate-700 last:border-0 ${i % 2 === 0 ? '' : 'bg-slate-50/50 dark:bg-slate-900/30'} ${zeile.an ? '' : 'opacity-40'}`}
-                  >
-                    <td className="px-4 py-2 font-mono text-slate-800 dark:text-slate-100">{zeile.name}</td>
-                    <td className="px-4 py-2">
-                      <div className="flex justify-end">
-                        <Toggle
-                          checked={zeile.an}
-                          disabled={werkzeug.isPending}
-                          onChange={(an) => {
-                            setHinweis(null)
-                            werkzeug.mutate({ name: zeile.name, an })
-                          }}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {data.werkzeuge.map((zeile, i) => {
+                  const frei = erlaubt(data.umfang, zeile.stufe) && zeile.an
+                  return (
+                    <tr
+                      key={zeile.name}
+                      className={`border-b border-slate-100 dark:border-slate-700 last:border-0 ${i % 2 === 0 ? '' : 'bg-slate-50/50 dark:bg-slate-900/30'} ${frei ? '' : 'opacity-40'}`}
+                    >
+                      <td className="px-4 py-2 font-mono text-slate-800 dark:text-slate-100">{zeile.name}</td>
+                      <td className="px-4 py-2">
+                        <div className="flex justify-end">
+                          <Toggle
+                            checked={frei}
+                            disabled={!erlaubt(data.umfang, zeile.stufe) || werkzeug.isPending}
+                            onChange={(an) => {
+                              setHinweis(null)
+                              werkzeug.mutate({ name: zeile.name, an })
+                            }}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from database.connection import get_db
 from database.models import Unternehmen
 
-from .mcp_laufzeit import setze_werkzeug, werkzeuge_fuer
+from .mcp_laufzeit import setze_vorgabe, setze_werkzeug, werkzeuge_fuer
 from .schnittstelle_kern import (
     UMFANG_LESEN,
     aktivieren,
@@ -22,11 +22,16 @@ router = APIRouter(prefix="/api/schnittstelle", tags=["Schnittstelle"])
 class WerkzeugStatus(BaseModel):
     name: str
     an: bool
+    stufe: str
 
 
 class WerkzeugSchaltung(BaseModel):
     name: str
     an: bool
+
+
+class UmfangSchaltung(BaseModel):
+    umfang: str
 
 
 class SchnittstelleStatus(BaseModel):
@@ -70,6 +75,18 @@ def einschalten(db: Session = Depends(get_db)) -> SchnittstelleStatus:
 def ausschalten(db: Session = Depends(get_db)) -> SchnittstelleStatus:
     firma = _zeile(db)
     deaktivieren(firma)
+    db.commit()
+    db.refresh(firma)
+    return _status(firma)
+
+
+@router.post("/umfang", response_model=SchnittstelleStatus)
+def umfang_setzen(daten: UmfangSchaltung, db: Session = Depends(get_db)) -> SchnittstelleStatus:
+    firma = _zeile(db)
+    try:
+        setze_vorgabe(firma, daten.umfang)
+    except ValueError as fehler:
+        raise HTTPException(status_code=422, detail="Unbekannte Vorgabe.") from fehler
     db.commit()
     db.refresh(firma)
     return _status(firma)

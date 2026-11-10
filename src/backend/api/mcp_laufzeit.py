@@ -15,7 +15,15 @@ from database.connection import SessionLocal
 from database.models import Unternehmen
 
 from . import lesen
-from .schnittstelle_kern import UMFANG_LESEN, bearer_token, darf, token_gleich
+from .schnittstelle_kern import (
+    UMFANG_ENTWUERFE,
+    UMFANG_LESEN,
+    UMFANG_VOLL,
+    bearer_token,
+    darf,
+    setze_umfang,
+    token_gleich,
+)
 
 
 class _Gesperrt(Exception):
@@ -50,12 +58,19 @@ def baue_server():
     mcp = MCPServer(
         "rechnungsfee",
         instructions=(
-            "Nur-Lese-Zugriff auf Rechnungen und Stammdaten der lokalen RechnungsFee. "
-            "Es wird nichts angelegt, geändert oder storniert."
+            "Rechnungen und Stammdaten der lokalen RechnungsFee. "
+            "Nur lesen zeigt nur Lese-Werkzeuge. Lesen + Entwürfe darf Entwürfe anlegen, "
+            "Löschen und Belege anhängen. Alles darf finalisieren, buchen und stornieren."
         ),
     )
 
-    @mcp.tool()
+    def werkzeug(stufe: str):
+        def wrap(fn):
+            _stufen[fn.__name__] = stufe
+            return mcp.tool()(fn)
+        return wrap
+
+    @werkzeug(UMFANG_LESEN)
     def rechnungen_liste(typ: str = "", zahlungsstatus: str = "", limit: int = 50) -> str:
         """Rechnungen, neueste zuerst. typ: leer, eingang, ausgang. zahlungsstatus: leer, offen, teilweise, bezahlt, entwurf, storniert."""
 
@@ -66,7 +81,7 @@ def baue_server():
 
         return _ausfuehren(UMFANG_LESEN, lauf)
 
-    @mcp.tool()
+    @werkzeug(UMFANG_LESEN)
     def rechnung_lesen(rechnung_id: int) -> str:
         """Eine Rechnung mit Positionen."""
 
@@ -80,52 +95,56 @@ def baue_server():
 
         return _ausfuehren(UMFANG_LESEN, lauf)
 
-    @mcp.tool()
+    @werkzeug(UMFANG_LESEN)
     def offene_rechnungen(limit: int = 50) -> str:
         """Offene und teilweise bezahlte Rechnungen."""
 
         return _ausfuehren(UMFANG_LESEN, lambda db: lesen.offene_rechnungen(db, limit=limit))
 
-    @mcp.tool()
+    @werkzeug(UMFANG_LESEN)
     def faellige_rechnungen(tage: int = 7, limit: int = 50) -> str:
         """Unbezahlte Rechnungen, überfällig oder in den nächsten Tagen fällig."""
 
         return _ausfuehren(UMFANG_LESEN, lambda db: lesen.faellige_rechnungen(db, tage=tage, limit=limit))
 
-    @mcp.tool()
+    @werkzeug(UMFANG_LESEN)
     def kunden_liste(limit: int = 50) -> str:
         """Kundenstamm."""
 
         return _ausfuehren(UMFANG_LESEN, lambda db: lesen.liste_kunden(db, limit=limit))
 
-    @mcp.tool()
+    @werkzeug(UMFANG_LESEN)
     def lieferanten_liste(limit: int = 50) -> str:
         """Lieferantenstamm."""
 
         return _ausfuehren(UMFANG_LESEN, lambda db: lesen.liste_lieferanten(db, limit=limit))
 
-    @mcp.tool()
+    @werkzeug(UMFANG_LESEN)
     def artikel_liste(limit: int = 50) -> str:
         """Artikel und Dienstleistungen."""
 
         return _ausfuehren(UMFANG_LESEN, lambda db: lesen.liste_artikel(db, limit=limit))
 
-    @mcp.tool()
+    @werkzeug(UMFANG_LESEN)
     def kontenrahmen() -> str:
         """Aktive Buchungskategorien mit der Kontonummer des gewählten Kontenrahmens."""
 
         return _ausfuehren(UMFANG_LESEN, lesen.kontenrahmen)
 
-    @mcp.tool()
+    @werkzeug(UMFANG_LESEN)
     def ust_saetze() -> str:
         """Hinterlegte Umsatzsteuersätze."""
 
         return _ausfuehren(UMFANG_LESEN, lesen.ust_saetze)
 
+    from .mcp_schreiben import registriere
+    registriere(mcp, werkzeug, _ausfuehren, _verlange, _Gesperrt)
+
     return mcp
 
 
 _werkzeug_namen: list[str] | None = None
+_stufen: dict[str, str] = {}
 
 
 def werkzeug_namen() -> list[str]:
@@ -150,7 +169,29 @@ def namen_aus(roh: str | None) -> set[str]:
 
 def werkzeuge_fuer(firma) -> list[dict[str, Any]]:
     aus = namen_aus(getattr(firma, "mcp_werkzeuge_aus", None))
-    return [{"name": name, "an": name not in aus} for name in werkzeug_namen()]
+    werkzeug_namen()
+    return [
+        {"name": name, "an": name not in aus, "stufe": _stufen.get(name, UMFANG_LESEN)}
+        for name in werkzeug_namen()
+    ]
+
+
+def werkzeug_gesperrt(firma, name: str) -> bool:
+    if name in namen_aus(getattr(firma, "mcp_werkzeuge_aus", None)):
+        return True
+    return not darf(getattr(firma, "mcp_umfang", None), _stufen.get(name, UMFANG_LESEN))
+
+
+def setze_vorgabe(firma, umfang: str) -> None:
+    setze_umfang(firma, umfang)
+    if umfang == UMFANG_VOLL:
+        firma.mcp_werkzeuge_aus = None
+        return
+    aus = [
+        name for name in werkzeug_namen()
+        if not darf(umfang, _stufen.get(name, UMFANG_LESEN))
+    ]
+    firma.mcp_werkzeuge_aus = json.dumps(sorted(aus), ensure_ascii=False) if aus else None
 
 
 def setze_werkzeug(firma, name: str, an: bool) -> None:
@@ -169,8 +210,8 @@ def ausgeschlossene_werkzeuge() -> set[str]:
     try:
         firma = db.query(Unternehmen).first()
         if firma is None:
-            return set()
-        return namen_aus(firma.mcp_werkzeuge_aus)
+            return set(werkzeug_namen())
+        return {name for name in werkzeug_namen() if werkzeug_gesperrt(firma, name)}
     finally:
         db.close()
 
